@@ -10,10 +10,15 @@ from .db import get_results, get_final_results, get_stats
 
 from typing import List
 from fastapi import Body
+from fastapi.responses import HTMLResponse
+from fastapi.templating import Jinja2Templates
+from fastapi import Request
 
 load_dotenv()
 
 app = FastAPI(title="Montecarlo API", version="1.0.0")
+
+templates = Jinja2Templates(directory="templates")
 
 # --- CORS ---
 app.add_middleware(
@@ -111,3 +116,12 @@ def simulate_batch(items: List[ScenarioIn] = Body(...)):
             "costo_total": costo_total
         })
     return outs
+
+@app.get("/dashboard", response_class=HTMLResponse)
+def dashboard(request: Request):
+    stats = get_stats()
+    finales = get_final_results(limit=20)
+    return templates.TemplateResponse(
+        "dashboard.html",
+        {"request": request, "stats": stats, "finales": finales}
+    )

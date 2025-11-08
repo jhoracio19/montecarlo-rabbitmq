@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html class="dark" lang="es">
+
+<head>
+    <meta charset="UTF-8" />
+    <title>Dashboard Montecarlo</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <style>
+        body {
+            background: #f5f6fa;
+        }
+
+        .card {
+            @apply bg-white rounded-xl shadow p-6;
+        }
+
+        .title {
+            @apply text-xl font-semibold mb-3;
+        }
+
+        /* Animación suave al cargar */
+        .fade-in {
+            animation: fadeIn 0.4s ease-in-out;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(5px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+    </style>
+</head>
+
+<body class="text-gray-800">
+    <!-- HEADER -->
+    <header class="bg-white shadow px-8 py-6">
+        <h1 class="text-3xl font-bold flex items-center gap-3">
+            📊 Dashboard del Sistema Montecarlo
+        </h1>
+        <p class="text-gray-500 mt-1">Monitor en tiempo real de simulaciones</p>
+    </header>
+
+    <!-- MAIN -->
+    <main class="p-8 space-y-10">
+
+        <!-- ✅ KPIs -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 fade-in">
+
+            <div class="card">
+                <p class="text-gray-500 text-sm">Total de Simulaciones</p>
+                <p id="kpi_total" class="text-3xl font-bold mt-2">...</p>
+            </div>
+
+            <div class="card">
+                <p class="text-gray-500 text-sm">Costo Promedio Final</p>
+                <p id="kpi_costo" class="text-3xl font-bold mt-2">...</p>
+            </div>
+
+            <div class="card">
+                <p class="text-gray-500 text-sm">Riesgo Promedio</p>
+                <p id="kpi_riesgo" class="text-3xl font-bold mt-2">...</p>
+            </div>
+
+        </div>
+
+        <!-- ✅ GRÁFICAS -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-8 fade-in">
+
+            <div class="card">
+                <h2 class="title">Distribución del Costo Total</h2>
+                <canvas id="chartCostos" height="140"></canvas>
+            </div>
+
+            <div class="card">
+                <h2 class="title">Riesgos Observados</h2>
+                <canvas id="chartRiesgo" height="140"></canvas>
+            </div>
+
+        </div>
+
+        <!-- ✅ TABLAS -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-8 fade-in">
+
+            <!-- Resultados Recientes -->
+            <div class="card">
+                <h2 class="title flex items-center gap-2">✅ Resultados Recientes</h2>
+
+                <div id="recentResults" class="max-h-80 overflow-y-auto text-sm">
+                    Cargando...
+                </div>
+            </div>
+
+            <!-- Resultados Finales -->
+            <div class="card">
+                <h2 class="title flex items-center gap-2">📈 Resultados Finales</h2>
+
+                <div id="finalResults" class="max-h-80 overflow-y-auto text-sm">
+                    Cargando...
+                </div>
+            </div>
+
+        </div>
+
+        <!-- Btn -->
+        <div class="text-center mt-10 fade-in">
+            <button onclick="loadDashboard()"
+                class="bg-blue-600 text-white px-6 py-3 rounded-xl text-lg shadow hover:bg-blue-700 transition">
+                🔄 Actualizar
+            </button>
+        </div>
+
+    </main>
+
+    <!-- ✅ SCRIPTS -->
+<script>
+    let chartCosto;
+    let chartRiesgo;
+
+    async function loadDashboard() {
+        // DOM elements
+        const rec = document.getElementById("recentResults");
+        const fin = document.getElementById("finalResults");
+
+        rec.innerHTML = "Cargando...";
+        fin.innerHTML = "Cargando...";
+
+        // API Calls
+        const r1 = await fetch("/results?limit=50");
+        const recent = await r1.json();
+
+        const r2 = await fetch("/results/finales?limit=50");
+        const finals = await r2.json();
+
+        // ✅ KPI updates
+        document.getElementById("kpi_total").innerText = recent.length;
+
+        document.getElementById("kpi_costo").innerText =
+            finals.length ? finals[0].costo_promedio.toFixed(2) : "...";
+
+        document.getElementById("kpi_riesgo").innerText =
+            finals.length ? finals[0].riesgo_promedio.toFixed(3) : "...";
+
+        // ✅ Render tablas
+        rec.innerHTML = recent
+            .map(x => `
+                <div class='border-b py-2'>
+                    <strong>ID:</strong> ${x.id} —
+                    Tiempo: ${x.tiempo}h —
+                    Costo: $${x.costo_total.toFixed(2)}
+                </div>
+            `)
+            .join("");
+
+        fin.innerHTML = finals
+            .map(x => `
+                <div class='border-b py-2'>
+                    <strong>ID:</strong> ${x.id} —
+                    Tiempo prom: ${x.tiempo_promedio.toFixed(2)} —
+                    Costo prom: $${x.costo_promedio.toFixed(2)} —
+                    Riesgo prom: ${x.riesgo_promedio.toFixed(3)}
+                </div>
+            `)
+            .join("");
+
+        // ✅ Render gráficos
+        renderCharts(recent);
+    }
+
+    function renderCharts(data) {
+        const costos = data.map(x => x.costo_total);
+        const riesgos = data.map(x => x.riesgo);
+
+        // ✅ Chart: Costo Total
+        if (chartCosto) chartCosto.destroy();
+        chartCosto = new Chart(document.getElementById("chartCostos"), {
+            type: "bar",
+            data: {
+                labels: costos.map((_, i) => "Sim " + (i + 1)),
+                datasets: [{
+                    label: "Costo Total",
+                    data: costos,
+                    backgroundColor: "rgba(59,130,246,0.5)",
+                    borderColor: "rgb(59,130,246)",
+                    borderWidth: 1
+                }]
+            }
+        });
+
+        // ✅ Chart: Riesgos
+        if (chartRiesgo) chartRiesgo.destroy();
+        chartRiesgo = new Chart(document.getElementById("chartRiesgo"), {
+            type: "line",
+            data: {
+                labels: riesgos.map((_, i) => "Sim " + (i + 1)),
+                datasets: [{
+                    label: "Riesgo",
+                    data: riesgos,
+                    borderColor: "rgb(239,68,68)",
+                    backgroundColor: "rgba(239,68,68,0.3)",
+                    borderWidth: 1,
+                    tension: 0.4
+                }]
+            }
+        });
+    }
+
+    // Auto load on start
+    loadDashboard();
+
+    // Refresh every 10 seconds
+    setInterval(loadDashboard, 10000);
+</script>
+
+
+</body>
+
+</html>
