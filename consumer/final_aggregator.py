@@ -1,51 +1,77 @@
 import sqlite3
-import time
 import os
+import time
 
 def get_db_path():
     ruta_actual = os.path.dirname(os.path.abspath(__file__))
     return os.path.abspath(os.path.join(ruta_actual, "..", "database", "results.db"))
 
-def calcular_resultados_finales():
+def obtener_totales():
     conn = sqlite3.connect(get_db_path())
     cur = conn.cursor()
 
-    # 1. Leer todos los resultados
+    cur.execute("SELECT COUNT(*) FROM resultados")
+    total = cur.fetchone()[0]
+
+    conn.close()
+    return total
+
+def calcular_y_guardar():
+    conn = sqlite3.connect(get_db_path())
+    cur = conn.cursor()
+
     cur.execute("""
-        SELECT tiempo, costo_total, riesgo
+        SELECT 
+            AVG(tiempo),
+            AVG(costo_total),
+            AVG(riesgo)
         FROM resultados
     """)
-    rows = cur.fetchall()
 
-    if not rows:
+    row = cur.fetchone()
+
+    if not row or row[0] is None:
         print("⚠️ No hay resultados aún.")
         conn.close()
         return
 
-    tiempos = [r[0] for r in rows]
-    costos = [r[1] for r in rows]
-    riesgos = [r[2] for r in rows]
+    tiempo_prom, costo_prom, riesgo_prom = row
 
-    tiempo_prom = sum(tiempos) / len(tiempos)
-    costo_prom = sum(costos) / len(costos)
-    riesgo_prom = sum(riesgos) / len(riesgos)
-
-    # 2. Guardar en tabla resultados_finales
     cur.execute("""
-        INSERT INTO resultados_finales (tiempo_promedio, costo_promedio, riesgo_promedio)
-        VALUES (?, ?, ?)
-    """, (tiempo_prom, costo_prom, riesgo_prom))
+        INSERT INTO resultados_finales (
+            tiempo_promedio,
+            costo_promedio,
+            riesgo_promedio,
+            created_at
+        )
+        VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+    """, (
+        tiempo_prom,
+        costo_prom,
+        riesgo_prom
+    ))
 
     conn.commit()
     conn.close()
 
-    print("✅ Resultados finales agregados correctamente")
+    print("✅ Resultados finales actualizados")
 
 def main():
-    print("📊 Calculador de resultados finales iniciado...")
+    print("📊 Agregador Final iniciado...\n")
+
+    last_total = obtener_totales()
+
     while True:
-        calcular_resultados_finales()
-        time.sleep(10)  # cada 10 segundos refresca
+        time.sleep(5)  # revisa cada 5 segundos
+
+        nuevo_total = obtener_totales()
+
+        if nuevo_total != last_total:
+            print("🔄 Nuevos datos detectados. Recalculando...")
+            calcular_y_guardar()
+            last_total = nuevo_total
+        else:
+            print("⏳ Sin cambios...")
 
 if __name__ == "__main__":
     main()

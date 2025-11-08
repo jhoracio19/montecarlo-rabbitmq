@@ -3,93 +3,81 @@ import pika
 import random
 import os
 
-# Leer el archivo del modelo
-
+# ===========================
+# CARGAR MODELO
+# ===========================
 def cargar_modelo():
-    # Ruta real del archivo producer.py
     ruta_actual = os.path.dirname(os.path.abspath(__file__))
+    ruta_modelo = os.path.abspath(os.path.join(ruta_actual, '..', 'data', 'model.json'))
     
-    # Subir a la carpeta raíz y entrar a data/model.json
-    ruta_modelo = os.path.join(ruta_actual, '..', 'data', 'model.json')
-
-    # Convertir a ruta absoluta
-    ruta_modelo = os.path.abspath(ruta_modelo)
-
     with open(ruta_modelo, 'r') as file:
         return json.load(file)
 
-
-# Generar un valor con distribución normal (acotada)
+# ===========================
+# FUNCIONES DE GENERACIÓN
+# ===========================
 def normal_bounded(mean, stddev, min_val, max_val):
     while True:
-        value = random.gauss(mean, stddev)
-        if min_val <= value <= max_val:
-            return value
+        val = random.gauss(mean, stddev)
+        if min_val <= val <= max_val:
+            return val
 
-# Elegir penalización discreta
 def elegir_discreto(values):
     r = random.random()
-    acumulado = 0
+    suma = 0
     for item in values:
-        acumulado += item["prob"]
-        if r <= acumulado:
+        suma += item["prob"]
+        if r <= suma:
             return item["value"]
 
-# Generar un escenario individual
 def generar_escenario(modelo):
-    tiempo_cfg = modelo["variables"]["tiempo"]
-    costo_cfg = modelo["variables"]["costo_hora"]
-    riesgo_cfg = modelo["variables"]["penalizacion_riesgo"]
+    t_cfg = modelo["variables"]["tiempo"]
+    c_cfg = modelo["variables"]["costo_hora"]
+    r_cfg = modelo["variables"]["penalizacion_riesgo"]
 
-    escenario = {
-        "tiempo": normal_bounded(
-            tiempo_cfg["mean"],
-            tiempo_cfg["stddev"],
-            tiempo_cfg["min"],
-            tiempo_cfg["max"]
-        ),
-        "costo_hora": random.uniform(
-            costo_cfg["min"],
-            costo_cfg["max"]
-        ),
-        "riesgo": elegir_discreto(
-            riesgo_cfg["values"]
-        )
+    return {
+        "tiempo": normal_bounded(t_cfg["mean"], t_cfg["stddev"], t_cfg["min"], t_cfg["max"]),
+        "costo_hora": random.uniform(c_cfg["min"], c_cfg["max"]),
+        "riesgo": elegir_discreto(r_cfg["values"])
     }
 
-    return escenario
-
-# Conexión a RabbitMQ
+# ===========================
+# CONEXIÓN A RABBIT
+# ===========================
 def conectar_rabbit():
     connection = pika.BlockingConnection(
         pika.ConnectionParameters(host='localhost')
     )
-    return connection.channel()
+    ch = connection.channel()
+    ch.confirm_delivery()  # ✅ confirmación
+    ch.queue_declare(queue='scenario_queue', durable=True)
+    return ch
 
+# ===========================
+# MAIN
+# ===========================
 def main():
-    # Cargar modelo
     modelo = cargar_modelo()
-
-    # Conexión
     channel = conectar_rabbit()
 
-    print("✅ Productor iniciado. Enviando escenarios...")
+    N = int(os.getenv("PRODUCER_BATCH", 200))
 
-    # Generar N escenarios
-    N = 100  # Puedes poner 1000 después
+    print(f"✅ Productor iniciado. Enviando {N} escenarios...")
+
     for i in range(N):
         escenario = generar_escenario(modelo)
         msg = json.dumps(escenario)
-        
+
         channel.basic_publish(
             exchange='',
             routing_key='scenario_queue',
-            body=msg
+            body=msg,
+            properties=pika.BasicProperties(delivery_mode=2)
         )
 
-        print(f"→ Enviado escenario {i+1}: {msg}")
+        print(f"→ Escenario enviado {i+1}/{N}")
 
-    print("✅ Escenarios enviados correctamente.")
+    print("✅ Todos los escenarios fueron enviados.")
     channel.close()
 
 if __name__ == "__main__":
