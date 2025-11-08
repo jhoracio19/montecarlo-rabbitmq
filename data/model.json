@@ -1,0 +1,27 @@
+{
+    "model_name": "proyecto_costo",
+    "description": "Simulación Montecarlo del costo total de un proyecto con variación en tiempo, costo por hora y penalización por riesgo.",
+    "variables": {
+        "tiempo": {
+            "distribution": "normal",
+            "mean": 8,
+            "stddev": 2,
+            "min": 4,
+            "max": 16
+        },
+        "costo_hora": {
+            "distribution": "uniform",
+            "min": 150,
+            "max": 600
+        },
+        "penalizacion_riesgo": {
+            "distribution": "discrete",
+            "values": [
+                { "value": 0.0,  "prob": 0.70 },
+                { "value": 0.10, "prob": 0.20 },
+                { "value": 0.30, "prob": 0.10 }
+            ]
+        }
+    },
+    "model_formula": "costo_total = tiempo * costo_hora * (1 + penalizacion_riesgo)"
+}
