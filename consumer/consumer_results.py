@@ -40,7 +40,7 @@ def main():
 
         guardar_en_db(resultado)
 
-        print("✅ Guardado en SQLite")
+        print("✅ Guardado en resultados")
 
         ch.basic_ack(delivery_tag=method.delivery_tag)
 
