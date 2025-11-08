@@ -8,6 +8,9 @@ from dotenv import load_dotenv
 from .schemas import ScenarioIn, ScenarioOut, ResultRow, FinalResult
 from .db import get_results, get_final_results, get_stats
 
+from typing import List
+from fastapi import Body
+
 load_dotenv()
 
 app = FastAPI(title="Montecarlo API", version="1.0.0")
@@ -86,3 +89,25 @@ def simulate(s: ScenarioIn):
         "riesgo": s.riesgo,
         "costo_total": costo_total,
     }
+
+@app.post("/simulate/batch", response_model=List[ScenarioOut])
+def simulate_batch(items: List[ScenarioIn] = Body(...)):
+    outs: List[ScenarioOut] = []
+    for s in items:
+        # mismo cálculo local que en /simulate
+        costo_total = s.tiempo * s.costo_hora
+        payload = {"tiempo": s.tiempo, "costo_hora": s.costo_hora, "riesgo": s.riesgo}
+
+        try:
+            publish_scenario(payload)
+        except Exception as e:
+            # si falla alguno, devuelve 500 (opcional: acumular errores por item)
+            raise HTTPException(status_code=500, detail=f"RabbitMQ error: {e}")
+
+        outs.append({
+            "tiempo": s.tiempo,
+            "costo_hora": s.costo_hora,
+            "riesgo": s.riesgo,
+            "costo_total": costo_total
+        })
+    return outs
