@@ -1,11 +1,23 @@
 import json
 import pika
 import random
+import os
 
 # Leer el archivo del modelo
+
 def cargar_modelo():
-    with open('../data/model.json', 'r') as file:
+    # Ruta real del archivo producer.py
+    ruta_actual = os.path.dirname(os.path.abspath(__file__))
+    
+    # Subir a la carpeta raíz y entrar a data/model.json
+    ruta_modelo = os.path.join(ruta_actual, '..', 'data', 'model.json')
+
+    # Convertir a ruta absoluta
+    ruta_modelo = os.path.abspath(ruta_modelo)
+
+    with open(ruta_modelo, 'r') as file:
         return json.load(file)
+
 
 # Generar un valor con distribución normal (acotada)
 def normal_bounded(mean, stddev, min_val, max_val):
